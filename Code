@@ -1,0 +1,52 @@
+#2022 SCHOOL PROJECT
+
+
+# Chargement des bibliothèques nécessaires
+library(dplyr)       # Pour la manipulation des données
+library(ggplot2)     # Pour la visualisation
+library(plm)         # Pour la régression en panel
+
+# 1. Chargement des données
+DATA <- read.csv("DATA.csv")   # Remplacer par le chemin d'accès à votre fichier
+INFLA <- read.csv("INFLA.csv") # Remplacer par le chemin d'accès à votre fichier
+
+# 2. Jointure des tables DATA et INFLA
+joined_data <- DATA %>%
+  left_join(INFLA, by = c("country" = "country", "year" = "year"))
+
+# 3. Statistiques descriptives pour comparaison entre les pays et temporelle
+summary_statistics <- joined_data %>%
+  group_by(country) %>%
+  summarise(across(c(PIB, POPULATION, EMPLOYMENT, CONSUMPTION, DEBT, EXPORTATION, inflation), 
+                   list(mean = mean, sd = sd, min = min, max = max)))
+
+print(summary_statistics)
+
+# 4. Statistiques descriptives pour nettoyage des données - boxplot pour détecter les outliers
+boxplot_data <- ggplot(joined_data, aes(x = factor(country), y = inflation)) + 
+  geom_boxplot() + 
+  labs(title = "Boxplot de l'inflation par pays", x = "Pays", y = "Inflation")
+
+print(boxplot_data)
+
+# 5. Retrait des outliers en utilisant la méthode des IQR
+Q1 <- quantile(joined_data$inflation, 0.25)
+Q3 <- quantile(joined_data$inflation, 0.75)
+IQR <- Q3 - Q1
+
+# Filtrage des données pour retirer les outliers
+cleaned_data <- joined_data %>%
+  filter(inflation >= (Q1 - 1.5 * IQR) & inflation <= (Q3 + 1.5 * IQR))
+
+# 6. Régression linéaire en panel
+model <- plm(inflation ~ PIB + POPULATION + EMPLOYMENT + CONSUMPTION + DEBT + EXPORTATION, 
+             data = cleaned_data, 
+             model = "within", # Modèle à effets fixes
+             index = c("country", "year"))
+
+# 7. Résumé du modèle
+summary(model)
+
+# 8. Évaluation des coefficients
+coefficients <- summary(model)$coefficients
+print(coefficients)
